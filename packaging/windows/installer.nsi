@@ -17,6 +17,9 @@ Unicode True
 !ifndef HIDAPI_DLL
   !error "HIDAPI_DLL is required"
 !endif
+!ifndef HIDAPI_DLL_NAME
+  !error "HIDAPI_DLL_NAME is required"
+!endif
 !ifndef WINSW_EXE
   !error "WINSW_EXE is required"
 !endif
@@ -106,7 +109,7 @@ Section "Ryujin Doom service" SEC_MAIN
   SetOutPath "$INSTDIR"
   File /oname=ryujin-doom.exe "${RYUJIN_DOOM_EXE}"
   File /oname=libusb-1.0.dll "${LIBUSB_DLL}"
-  File /oname=libhidapi.dll "${HIDAPI_DLL}"
+  File /oname=${HIDAPI_DLL_NAME} "${HIDAPI_DLL}"
   File /oname=ryujin-doom-service.exe "${WINSW_EXE}"
   File /oname=ryujin-doom-service.xml "${SERVICE_XML}"
   File /oname=ryujin-doom-wad.ps1 "${WAD_HELPER}"
@@ -204,7 +207,7 @@ Section "Uninstall"
 
   Delete "$INSTDIR\ryujin-doom.exe"
   Delete "$INSTDIR\libusb-1.0.dll"
-  Delete "$INSTDIR\libhidapi.dll"
+  Delete "$INSTDIR\${HIDAPI_DLL_NAME}"
   Delete "$INSTDIR\ryujin-doom-service.exe"
   Delete "$INSTDIR\ryujin-doom-service.xml"
   Delete "$INSTDIR\ryujin-doom-wad.ps1"

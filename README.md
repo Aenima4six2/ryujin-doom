@@ -134,7 +134,7 @@ no supported sensor is available.
 
 ## Release builds
 
-To reproduce the packages on Linux:
+Linux packages can be reproduced on Linux:
 
 ```sh
 sudo apt-get install build-essential pkg-config libusb-1.0-0-dev git curl \
@@ -143,8 +143,11 @@ sudo apt-get install build-essential pkg-config libusb-1.0-0-dev git curl \
 make dist VERSION=1.2.3 JOBS=8
 ```
 
-The builder downloads checksum-pinned libusb, HIDAPI, WinSW, and doomgeneric
-sources, then emits all artifacts under `dist/`. It never downloads a WAD.
+GitHub Actions builds the Windows runtime separately on `windows-2022`, using
+MSYS2 UCRT64 with its native `libusb` and `hidapi` packages—the same toolchain
+used by the manual Windows build below. The Linux packaging job inserts that
+exact executable and its `libhidapi-0.dll`/`libusb-1.0.dll` runtime pair into
+the Windows ZIP and installer. It never downloads a WAD.
 For a manual native Windows build, use an MSYS2 UCRT64 shell with `gcc`,
 `pkgconf`, `libusb`, and `hidapi`, then run:
 

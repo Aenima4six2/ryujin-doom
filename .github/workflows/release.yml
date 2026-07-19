@@ -17,7 +17,45 @@ permissions:
   contents: write
 
 jobs:
+  windows-runtime:
+    runs-on: windows-2022
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Set up the native MSYS2 UCRT64 toolchain
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-make
+            mingw-w64-ucrt-x86_64-pkgconf
+            mingw-w64-ucrt-x86_64-libusb
+            mingw-w64-ucrt-x86_64-hidapi
+
+      - name: Build the native Windows runtime
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          make PLATFORM=windows clean
+          make -j"$(nproc)" PLATFORM=windows CC=gcc all
+          objdump -p ryujin-doom.exe | grep -F 'DLL Name: libhidapi-0.dll'
+          mkdir -p windows-runtime
+          cp ryujin-doom.exe windows-runtime/
+          cp /ucrt64/bin/libusb-1.0.dll windows-runtime/
+          cp /ucrt64/bin/libhidapi-0.dll windows-runtime/
+
+      - name: Upload native Windows runtime
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-runtime
+          path: windows-runtime/
+          if-no-files-found: error
+
   release:
+    needs: windows-runtime
     runs-on: ubuntu-22.04
     steps:
       - name: Check out source
@@ -28,8 +66,13 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             build-essential pkg-config libusb-1.0-0-dev git curl patch \
-            zip unzip dpkg-dev rpm gcc-mingw-w64-x86-64 \
-            binutils-mingw-w64-x86-64 cmake nsis
+            zip unzip dpkg-dev rpm nsis
+
+      - name: Download native Windows runtime
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-runtime
+          path: windows-runtime
 
       - name: Select release inputs
         shell: bash
@@ -46,7 +89,12 @@ jobs:
         run: ./scripts/check-release-tree.sh
 
       - name: Build DEB, RPM, Windows setup, and portable archives
-        run: ./scripts/build-release.sh
+        run: WINDOWS_RUNTIME_DIR="$GITHUB_WORKSPACE/windows-runtime" ./scripts/build-release.sh
+
+      - name: Verify packaged native HID runtime
+        run: |
+          unzip -l "dist/ryujin-doom-${VERSION}-windows-x86_64.zip" | \
+            grep -F 'libhidapi-0.dll'
 
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4

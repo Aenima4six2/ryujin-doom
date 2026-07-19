@@ -7,6 +7,7 @@ version=${version#v}
 dist_dir=${DIST_DIR:-"${repo_dir}/dist"}
 cache_dir=${RYUJIN_DOOM_RELEASE_CACHE:-"${repo_dir}/.cache/release"}
 jobs=${JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)}
+windows_runtime_dir=${WINDOWS_RUNTIME_DIR:-}
 
 libusb_version=1.0.30
 libusb_url=https://github.com/libusb/libusb/releases/download/v${libusb_version}/libusb-${libusb_version}.tar.bz2
@@ -39,9 +40,12 @@ if [[ ! ${version} =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
 fi
 
 required_commands=(
-    awk cmake curl dpkg-deb git install make makensis patch pkg-config rpm
-    rpmbuild sed sha256sum tar unzip x86_64-w64-mingw32-gcc zip
+    awk curl dpkg-deb git install make makensis patch pkg-config rpm rpmbuild
+    sed sha256sum tar unzip zip
 )
+if [[ -z ${windows_runtime_dir} ]]; then
+    required_commands+=(cmake x86_64-w64-mingw32-gcc)
+fi
 missing_commands=()
 for command_name in "${required_commands[@]}"; do
     command -v "${command_name}" >/dev/null 2>&1 || missing_commands+=("${command_name}")
@@ -49,7 +53,8 @@ done
 if (( ${#missing_commands[@]} )); then
     echo "Missing release tools: ${missing_commands[*]}" >&2
     echo "On Ubuntu, install them with:" >&2
-    echo "  sudo apt-get install build-essential pkg-config libusb-1.0-0-dev git curl patch zip unzip dpkg-dev rpm gcc-mingw-w64-x86-64 binutils-mingw-w64-x86-64 cmake nsis" >&2
+    echo "  sudo apt-get install build-essential pkg-config libusb-1.0-0-dev git curl patch zip unzip dpkg-dev rpm nsis" >&2
+    echo "  # Add gcc-mingw-w64-x86-64 and cmake only when not supplying WINDOWS_RUNTIME_DIR." >&2
     exit 1
 fi
 
@@ -121,41 +126,58 @@ install -m 0644 "${lhm_source}"/*.dll "${lhm_runtime}/"
 install -m 0644 "${repo_dir}/packaging/windows/cpu-temp.ps1" \
     "${lhm_runtime}/cpu-temp.ps1"
 
-echo "Cross-building shared libusb ${libusb_version}"
-(
-    cd "${libusb_source}"
-    ./configure --host=x86_64-w64-mingw32 --prefix="${windows_prefix}" \
-        --enable-shared --disable-static
-    make -j"${jobs}"
-    make install
-)
+if [[ -n ${windows_runtime_dir} ]]; then
+    # GitHub Actions supplies this from a native MSYS2 UCRT64 build on Windows.
+    # Keep its runtime pair intact: the executable's import names must exactly
+    # match the DLL names installed in the ZIP and setup.exe.
+    windows_runtime_dir=$(cd -- "${windows_runtime_dir}" && pwd)
+    windows_exe="${windows_runtime_dir}/ryujin-doom.exe"
+    windows_libusb_dll="${windows_runtime_dir}/libusb-1.0.dll"
+    windows_hidapi_dll="${windows_runtime_dir}/libhidapi-0.dll"
+    for runtime_file in "${windows_exe}" "${windows_libusb_dll}" \
+        "${windows_hidapi_dll}"; do
+        [[ -f ${runtime_file} ]] || {
+            echo "Missing native Windows runtime file: ${runtime_file}" >&2
+            exit 1
+        }
+    done
+else
+    echo "Cross-building shared libusb ${libusb_version}"
+    (
+        cd "${libusb_source}"
+        ./configure --host=x86_64-w64-mingw32 --prefix="${windows_prefix}" \
+            --enable-shared --disable-static
+        make -j"${jobs}"
+        make install
+    )
 
-echo "Cross-building shared HIDAPI ${hidapi_version}"
-cmake -S "${hidapi_source}" -B "${work_dir}/hidapi-build" \
-    -DCMAKE_SYSTEM_NAME=Windows \
-    -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc \
-    -DCMAKE_RC_COMPILER=x86_64-w64-mingw32-windres \
-    -DCMAKE_INSTALL_PREFIX="${windows_prefix}" \
-    -DCMAKE_INSTALL_LIBDIR=lib \
-    -DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY \
-    -DBUILD_SHARED_LIBS=ON \
-    -DHIDAPI_BUILD_HIDTEST=OFF \
-    -DHIDAPI_WITH_TESTS=OFF
-cmake --build "${work_dir}/hidapi-build" --parallel "${jobs}"
-cmake --install "${work_dir}/hidapi-build"
+    echo "Cross-building shared HIDAPI ${hidapi_version}"
+    cmake -S "${hidapi_source}" -B "${work_dir}/hidapi-build" \
+        -DCMAKE_SYSTEM_NAME=Windows \
+        -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc \
+        -DCMAKE_RC_COMPILER=x86_64-w64-mingw32-windres \
+        -DCMAKE_INSTALL_PREFIX="${windows_prefix}" \
+        -DCMAKE_INSTALL_LIBDIR=lib \
+        -DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY \
+        -DBUILD_SHARED_LIBS=ON \
+        -DHIDAPI_BUILD_HIDTEST=OFF \
+        -DHIDAPI_WITH_TESTS=OFF
+    cmake --build "${work_dir}/hidapi-build" --parallel "${jobs}"
+    cmake --install "${work_dir}/hidapi-build"
 
-echo "Building native Windows executable"
-make -C "${repo_dir}" PLATFORM=windows clean
-PKG_CONFIG_LIBDIR="${windows_prefix}/lib/pkgconfig" \
-PKG_CONFIG_PATH= \
-make -C "${repo_dir}" -j"${jobs}" PLATFORM=windows \
-    CC=x86_64-w64-mingw32-gcc PKG_CONFIG=pkg-config LDFLAGS='-static-libgcc' all
-windows_exe="${work_dir}/ryujin-doom.exe"
-cp "${repo_dir}/ryujin-doom.exe" "${windows_exe}"
-windows_libusb_dll="${windows_prefix}/bin/libusb-1.0.dll"
-windows_hidapi_dll="${windows_prefix}/bin/libhidapi.dll"
-test -f "${windows_libusb_dll}"
-test -f "${windows_hidapi_dll}"
+    echo "Cross-building Windows executable"
+    make -C "${repo_dir}" PLATFORM=windows clean
+    PKG_CONFIG_LIBDIR="${windows_prefix}/lib/pkgconfig" \
+    PKG_CONFIG_PATH= \
+    make -C "${repo_dir}" -j"${jobs}" PLATFORM=windows \
+        CC=x86_64-w64-mingw32-gcc PKG_CONFIG=pkg-config LDFLAGS='-static-libgcc' all
+    windows_exe="${work_dir}/ryujin-doom.exe"
+    cp "${repo_dir}/ryujin-doom.exe" "${windows_exe}"
+    windows_libusb_dll="${windows_prefix}/bin/libusb-1.0.dll"
+    windows_hidapi_dll="${windows_prefix}/bin/libhidapi.dll"
+    test -f "${windows_libusb_dll}"
+    test -f "${windows_hidapi_dll}"
+fi
 
 source_url="${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:-unknown/ryujin-doom}"
 source_file="${work_dir}/SOURCE.txt"
@@ -251,7 +273,8 @@ windows_bundle="${work_dir}/ryujin-doom-${version}-windows-x86_64"
 mkdir -p "${windows_bundle}"
 install -m 0755 "${windows_exe}" "${windows_bundle}/ryujin-doom.exe"
 install -m 0755 "${windows_libusb_dll}" "${windows_bundle}/libusb-1.0.dll"
-install -m 0755 "${windows_hidapi_dll}" "${windows_bundle}/libhidapi.dll"
+install -m 0755 "${windows_hidapi_dll}" \
+    "${windows_bundle}/$(basename "${windows_hidapi_dll}")"
 install -m 0755 "${winsw_exe}" "${windows_bundle}/ryujin-doom-service.exe"
 install -m 0644 "${repo_dir}/packaging/windows/ryujin-doom-service.xml" \
     "${windows_bundle}/ryujin-doom-service.xml"
@@ -287,6 +310,7 @@ makensis -WX \
     "-DRYUJIN_DOOM_EXE=${windows_exe}" \
     "-DLIBUSB_DLL=${windows_libusb_dll}" \
     "-DHIDAPI_DLL=${windows_hidapi_dll}" \
+    "-DHIDAPI_DLL_NAME=$(basename "${windows_hidapi_dll}")" \
     "-DWINSW_EXE=${winsw_exe}" \
     "-DSERVICE_XML=${repo_dir}/packaging/windows/ryujin-doom-service.xml" \
     "-DCOPYING_FILE=${copying_file}" \
