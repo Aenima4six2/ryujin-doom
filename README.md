@@ -84,6 +84,12 @@ If either command reports that the task does not exist, use Armoury Crate's
 tray/menu controls or Task Manager instead; do not substitute a guessed task,
 service, or executable name.
 
+The Windows service also includes best-effort start/stop hooks for this task
+profile. They discover task actions at runtime, save only the tasks they
+disabled, and always allow Ryujin Doom to start or stop even when Armoury Crate
+is absent or uses an unsupported layout. Their activity is logged to
+`logs\armoury-crate.log` in the installation directory.
+
 ## Build and run
 
 ```sh

@@ -195,6 +195,10 @@ Copy-Item (Join-Path $RepoDir "scripts\uninstall-windows.ps1") `
     (Join-Path $InstallDir "uninstall-windows.ps1") -Force
 Copy-Item (Join-Path $RepoDir "packaging\windows\stop-hardware-monitor.ps1") `
     (Join-Path $InstallDir "stop-hardware-monitor.ps1") -Force
+Copy-Item (Join-Path $RepoDir "packaging\windows\armoury-crate-stop.ps1") `
+    (Join-Path $InstallDir "armoury-crate-stop.ps1") -Force
+Copy-Item (Join-Path $RepoDir "packaging\windows\armoury-crate-restore.ps1") `
+    (Join-Path $InstallDir "armoury-crate-restore.ps1") -Force
 Copy-Item (Join-Path $RepoDir "assets\wads.catalog") (Join-Path $InstallDir "wads.catalog") -Force
 
 $msysInstallRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $script:MsysBash))
