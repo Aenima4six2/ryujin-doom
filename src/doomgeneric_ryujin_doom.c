@@ -63,7 +63,10 @@ static void armoury_lcd_takeover(void)
 
 static void armoury_lcd_release(void)
 {
-	(void)system("if exist \"%ProgramData%\\ryujin-doom\\armoury-socket-task.disabled\" (schtasks.exe /Change /TN \"\\ASUS\\ArmourySocketServer\" /Enable >NUL 2>&1 && del /Q \"%ProgramData%\\ryujin-doom\\armoury-socket-task.disabled\")");
+	/* Re-enable and run the task. Enabling alone waits for its next trigger,
+	 * leaving the cooler blank until Armoury Crate happens to restart itself.
+	 */
+	(void)system("if exist \"%ProgramData%\\ryujin-doom\\armoury-socket-task.disabled\" (schtasks.exe /Change /TN \"\\ASUS\\ArmourySocketServer\" /Enable >NUL 2>&1 & schtasks.exe /Run /TN \"\\ASUS\\ArmourySocketServer\" >NUL 2>&1 & del /Q \"%ProgramData%\\ryujin-doom\\armoury-socket-task.disabled\")");
 }
 #endif
 
