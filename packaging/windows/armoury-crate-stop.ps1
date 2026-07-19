@@ -1,6 +1,8 @@
 param(
     [Parameter(Mandatory)] [string] $StatePath,
-    [Parameter(Mandatory)] [string] $LogPath
+    [Parameter(Mandatory)] [string] $LogPath,
+    [switch] $Refresh,
+    [ValidateRange(0, 60)] [int] $DelaySeconds = 0
 )
 
 # Best-effort companion for the Windows service. Never fail the service start.
@@ -16,7 +18,12 @@ function Write-ArmouryLog([string] $Message) {
 }
 
 try {
-    if (Test-Path -LiteralPath $StatePath) {
+    if ($DelaySeconds) {
+        Start-Sleep -Seconds $DelaySeconds
+    }
+
+    $hasState = Test-Path -LiteralPath $StatePath
+    if ($hasState -and -not $Refresh) {
         Write-ArmouryLog "existing state retained after an unclean service stop"
         exit 0
     }
@@ -34,25 +41,27 @@ try {
     }
 
     $disabled = @()
-    foreach ($task in $tasks) {
-        if (-not $task.Settings.Enabled) {
-            continue
-        }
-        try {
-            Disable-ScheduledTask -TaskPath $task.TaskPath -TaskName $task.TaskName |
-                Out-Null
-            $disabled += [pscustomobject]@{
-                TaskPath = $task.TaskPath
-                TaskName = $task.TaskName
+    if (-not $hasState) {
+        foreach ($task in $tasks) {
+            if (-not $task.Settings.Enabled) {
+                continue
             }
-        } catch {
-            Write-ArmouryLog "could not disable $($task.TaskPath)$($task.TaskName): $($_.Exception.Message)"
+            try {
+                Disable-ScheduledTask -TaskPath $task.TaskPath -TaskName $task.TaskName |
+                    Out-Null
+                $disabled += [pscustomobject]@{
+                    TaskPath = $task.TaskPath
+                    TaskName = $task.TaskName
+                }
+            } catch {
+                Write-ArmouryLog "could not disable $($task.TaskPath)$($task.TaskName): $($_.Exception.Message)"
+            }
         }
-    }
 
-    if ($disabled.Count -eq 0) {
-        Write-ArmouryLog "no enabled Armoury LCD task was disabled"
-        exit 0
+        if ($disabled.Count -eq 0) {
+            Write-ArmouryLog "no enabled Armoury LCD task was disabled"
+            exit 0
+        }
     }
 
     foreach ($name in 'ArmourySocketServer', 'AIOFanSDK') {
@@ -62,13 +71,17 @@ try {
         }
     }
 
-    $stateDirectory = Split-Path -Parent $StatePath
-    New-Item -ItemType Directory -Force -Path $stateDirectory | Out-Null
-    [pscustomobject]@{
-        Schema = 1
-        DisabledTasks = $disabled
-    } | ConvertTo-Json -Depth 3 | Set-Content -LiteralPath $StatePath -Encoding utf8
-    Write-ArmouryLog "disabled $($disabled.Count) discovered Armoury LCD task(s)"
+    if ($hasState) {
+        Write-ArmouryLog "refreshed late-starting Armoury LCD writer"
+    } else {
+        $stateDirectory = Split-Path -Parent $StatePath
+        New-Item -ItemType Directory -Force -Path $stateDirectory | Out-Null
+        [pscustomobject]@{
+            Schema = 1
+            DisabledTasks = $disabled
+        } | ConvertTo-Json -Depth 3 | Set-Content -LiteralPath $StatePath -Encoding utf8
+        Write-ArmouryLog "disabled $($disabled.Count) discovered Armoury LCD task(s)"
+    }
 } catch {
     Write-ArmouryLog "ignored error: $($_.Exception.Message)"
 }
