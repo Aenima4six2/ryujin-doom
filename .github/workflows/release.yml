@@ -29,6 +29,8 @@ jobs:
           msystem: UCRT64
           update: true
           install: >-
+            make
+            coreutils
             mingw-w64-ucrt-x86_64-gcc
             mingw-w64-ucrt-x86_64-make
             mingw-w64-ucrt-x86_64-pkgconf
@@ -39,6 +41,9 @@ jobs:
         shell: msys2 {0}
         run: |
           set -euo pipefail
+          command -v make
+          command -v gcc
+          command -v objdump
           make PLATFORM=windows clean
           make -j"$(nproc)" PLATFORM=windows CC=gcc all
           objdump -p ryujin-doom.exe | grep -F 'DLL Name: libhidapi-0.dll'
