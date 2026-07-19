@@ -60,7 +60,9 @@ static long long monotonic_ns(void)
 
 	QueryPerformanceCounter(&counter);
 	QueryPerformanceFrequency(&frequency);
-	return (long long)(counter.QuadPart * 1000000000LL / frequency.QuadPart);
+	return (counter.QuadPart / frequency.QuadPart) * 1000000000LL +
+		(counter.QuadPart % frequency.QuadPart) * 1000000000LL /
+		frequency.QuadPart;
 #else
 	struct timespec ts;
 
