@@ -68,6 +68,22 @@ return to its normal display. Ryujin Doom deliberately does not stop, disable,
 or restart ASUS tasks, services, or processes, because their names and startup
 behavior vary across Armoury Crate versions.
 
+For Armoury Crate installations that use the `ArmourySocketServer` scheduled
+task, the following version-specific commands can be run from an elevated
+PowerShell window before and after Ryujin Doom:
+
+```powershell
+# Before Ryujin Doom: disable the task and stop its current writer.
+& schtasks.exe /Change /TN '\ASUS\ArmourySocketServer' /Disable; & schtasks.exe /End /TN '\ASUS\ArmourySocketServer'; & taskkill.exe /F /T /IM ArmourySocketServer.exe
+
+# After Ryujin Doom: re-enable and trigger the task, then reopen Armoury Crate if needed.
+& schtasks.exe /Change /TN '\ASUS\ArmourySocketServer' /Enable; & schtasks.exe /Run /TN '\ASUS\ArmourySocketServer'
+```
+
+If either command reports that the task does not exist, use Armoury Crate's
+tray/menu controls or Task Manager instead; do not substitute a guessed task,
+service, or executable name.
+
 ## Build and run
 
 ```sh
