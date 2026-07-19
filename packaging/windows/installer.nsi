@@ -80,6 +80,9 @@ Unicode True
 !ifndef ARMOURY_RESTORE
   !error "ARMOURY_RESTORE is required"
 !endif
+!ifndef SERVICE_RUNNER
+  !error "SERVICE_RUNNER is required"
+!endif
 
 Name "Ryujin Doom ${VERSION}"
 OutFile "${OUTPUT_FILE}"
@@ -133,6 +136,7 @@ Section "Ryujin Doom service" SEC_MAIN
   File /oname=stop-hardware-monitor.ps1 "${STOP_HARDWARE_MONITOR}"
   File /oname=armoury-crate-stop.ps1 "${ARMOURY_STOP}"
   File /oname=armoury-crate-restore.ps1 "${ARMOURY_RESTORE}"
+  File /oname=ryujin-doom-service.ps1 "${SERVICE_RUNNER}"
   File /oname=SOURCE.txt "${SOURCE_FILE}"
   SetOutPath "$INSTDIR\hardware-monitor"
   File /r "${HARDWARE_MONITOR_DIR}\*.*"
@@ -233,6 +237,7 @@ Section "Uninstall"
   Delete "$INSTDIR\stop-hardware-monitor.ps1"
   Delete "$INSTDIR\armoury-crate-stop.ps1"
   Delete "$INSTDIR\armoury-crate-restore.ps1"
+  Delete "$INSTDIR\ryujin-doom-service.ps1"
   Delete "$INSTDIR\SOURCE.txt"
   Delete "$INSTDIR\uninstall.exe"
   RMDir /r "$INSTDIR\hardware-monitor"

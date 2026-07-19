@@ -2,8 +2,8 @@
   <id>ryujin-doom</id>
   <name>Ryujin Doom</name>
   <description>DOOM and live cooler/CPU telemetry on the ASUS ROG Ryujin III Extreme LCD.</description>
-  <executable>%BASE%\ryujin-doom.exe</executable>
-  <arguments>-iwad "%ProgramData%\ryujin-doom\IWAD.WAD"</arguments>
+  <executable>powershell.exe</executable>
+  <arguments>-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%BASE%\ryujin-doom-service.ps1" -ExecutablePath "%BASE%\ryujin-doom.exe" -IwadPath "%ProgramData%\ryujin-doom\IWAD.WAD" -StatePath "%ProgramData%\ryujin-doom\armoury-crate-state.json" -LogPath "%BASE%\logs\armoury-crate.log"</arguments>
   <workingdirectory>%BASE%</workingdirectory>
   <startmode>Manual</startmode>
   <stoptimeout>10sec</stoptimeout>

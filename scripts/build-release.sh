@@ -286,6 +286,8 @@ install -m 0644 "${repo_dir}/packaging/windows/armoury-crate-stop.ps1" \
     "${windows_bundle}/armoury-crate-stop.ps1"
 install -m 0644 "${repo_dir}/packaging/windows/armoury-crate-restore.ps1" \
     "${windows_bundle}/armoury-crate-restore.ps1"
+install -m 0644 "${repo_dir}/packaging/windows/ryujin-doom-service.ps1" \
+    "${windows_bundle}/ryujin-doom-service.ps1"
 install -m 0644 "${repo_dir}/assets/wads.catalog" "${windows_bundle}/wads.catalog"
 install -m 0644 "${repo_dir}/README.md" "${windows_bundle}/README.md"
 install -m 0644 "${copying_file}" "${windows_bundle}/COPYING.txt"
@@ -335,6 +337,7 @@ makensis -WX \
     "-DSTOP_HARDWARE_MONITOR=${repo_dir}/packaging/windows/stop-hardware-monitor.ps1" \
     "-DARMOURY_STOP=${repo_dir}/packaging/windows/armoury-crate-stop.ps1" \
     "-DARMOURY_RESTORE=${repo_dir}/packaging/windows/armoury-crate-restore.ps1" \
+    "-DSERVICE_RUNNER=${repo_dir}/packaging/windows/ryujin-doom-service.ps1" \
     "${repo_dir}/packaging/windows/installer.nsi"
 
 checksum_output="${dist_dir}/SHA256SUMS-${version}.txt"
