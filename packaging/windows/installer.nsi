@@ -158,6 +158,17 @@ Section "Ryujin Doom service" SEC_MAIN
 
   wad_ready:
     Delete "$APPDATA\ryujin-doom\README-WAD.txt"
+    DetailPrint "Starting the Ryujin Doom service..."
+    nsExec::ExecToLog 'sc.exe config ryujin-doom start= auto'
+    Pop $0
+    ${If} $0 != 0
+      Abort "Could not configure the Ryujin Doom service to start automatically (exit code $0)."
+    ${EndIf}
+    nsExec::ExecToLog '"$INSTDIR\ryujin-doom-service.exe" start'
+    Pop $0
+    ${If} $0 != 0
+      Abort "Could not start the Ryujin Doom service (exit code $0)."
+    ${EndIf}
 
   wad_attempt_done:
   WriteUninstaller "$INSTDIR\uninstall.exe"

@@ -59,11 +59,6 @@ The installer also installs PawnIO and a LibreHardwareMonitor provider for CPU
 temperature. Portable `.zip` users must run `PawnIO_setup.exe -install` once
 from Administrator PowerShell.
 
-When Armoury Crate is installed, Ryujin Doom temporarily disables its
-`ArmourySocketServer` task and ends its AIOFanSDK process tree while it owns
-the LCD. The task is re-enabled when Ryujin Doom exits, so Armoury Crate can
-resume its normal cooler display afterward.
-
 ## Build and run
 
 ```sh
