@@ -1,0 +1,13 @@
+# Keep source and automation files Unix-readable on every checkout. This is
+# especially required for the Linux release scripts executed by GitHub Actions.
+* text=auto eol=lf
+
+# Never apply text normalization to generated or media binaries.
+*.gif binary
+*.mp4 binary
+*.exe binary
+*.dll binary
+*.wad binary
+*.WAD binary
+*.pk3 binary
+*.PK3 binary
