@@ -1,0 +1,455 @@
+--- a/st_stuff.h
++++ b/st_stuff.h
+@@ -51,6 +51,10 @@
+ // Called by startup code.
+ void ST_Init (void);
+ 
++// Supply live cooler and CPU values for the four status-bar numbers.
++void ST_SetRyujinStats(int liquid_temp, int pump_rpm, int pump_fan_rpm,
++		       int cpu_temp);
++
+ 
+ 
+ // States for status bar code.
+--- a/st_stuff.c
++++ b/st_stuff.c
+@@ -20,13 +20,16 @@
+ 
+ 
+ 
++#include <ctype.h>
+ #include <stdio.h>
++#include <string.h>
+ 
+ #include "i_system.h"
+ #include "i_video.h"
+ #include "z_zone.h"
+ #include "m_misc.h"
+ #include "m_random.h"
++#include "i_swap.h"
+ #include "w_wad.h"
+ 
+ #include "deh_main.h"
+@@ -86,6 +89,67 @@
+ #define ST_FX  			143
+ #define ST_FY  			169
+ 
++// The big-number panels are recaptioned for system telemetry and
++// the weapon/ammo furniture (ARMS grid, key boxes, ammo counters) is
++// removed, so each value gets a centered panel:
++//   PUMP   -> merged AMMO+HEALTH panel (left of the ARMS bay)
++//   LIQUID -> the ARMS bay itself
++//   FAN    -> left half of the old ARMOR/key/ammo area
++//   CPU    -> right half of that area, separated by a restored bevel
++// RPM values need four digits; temperatures never exceed two (deg C).
++#define ST_STATSY		171
++
++#define ST_PUMPCX		52
++#define ST_PUMPWIDTH		4
++#define ST_LIQUIDCX		118
++#define ST_LIQUIDWIDTH		2
++#define ST_FANCX		213
++#define ST_FANWIDTH		4
++#define ST_CPUCX		285
++#define ST_CPUWIDTH		2
++
++// The original AMMO/HEALTH/ARMOR/FRAG captions are baked into the STBAR
++// patch.  Each caption band is wiped with leather texture shifted down
++// from ST_LABELBANDUP rows above, then redrawn with the caption font.
++#define ST_LABELBANDTOP		21
++#define ST_LABELBANDBOTTOM	30
++#define ST_LABELBANDUP		10
++#define ST_LABELY		23
++
++#define ST_PUMPLABELX0		6
++#define ST_PUMPLABELX1		100
++#define ST_PUMPLABELCX		ST_PUMPCX
++
++#define ST_LIQUIDLABELX0	106
++#define ST_LIQUIDLABELX1	142
++#define ST_LIQUIDLABELCX	ST_LIQUIDCX
++
++#define ST_FANLABELX0		178
++#define ST_FANLABELX1		319
++#define ST_FANLABELCX		ST_FANCX
++#define ST_CPULABELCX		ST_CPUCX
++
++// The ammo counter cluster (key boxes, BULL/SHEL/ROKT/CELL captions,
++// recessed number wells) is baked into the right end of STBAR.  It is
++// covered with leather cloned from the clear stretch of the left panel so
++// the FAN field gets a clean run.  Full-height copies keep the bar's top
++// highlight and bottom trim intact.
++#define ST_CLONESRCX		14
++#define ST_CLONEDSTX		239
++#define ST_CLONEWIDTH		81
++
++// Obsolete panel dividers (each a dark line plus bevel highlight) get the
++// same treatment: covered with plain leather cloned from just beside them,
++// while the intentional FAN/CPU splitter is restored separately below.
++#define ST_BEVEL0_DST		46	// AMMO number-well edge (PUMP panel)
++#define ST_BEVEL0_SRC		49
++#define ST_BEVEL1_DST		104	// ARMS bay edge (LIQUID panel)
++#define ST_BEVEL1_SRC		108
++#define ST_BEVEL2_DST		235	// key-box divider (FAN panel)
++#define ST_BEVEL2_SRC		231
++#define ST_BEVELWIDTH		3
++#define ST_SPLITTERX		247
++
+ // Should be set to patch width
+ //  for tall numbers later on
+ #define ST_TALLNUMWIDTH		(tallnum[0]->width)
+@@ -337,9 +401,6 @@
+  // in deathmatch only, summary of frags stats
+ static st_number_t	w_frags;
+ 
+-// health widget
+-static st_percent_t	w_health;
+-
+ // arms background
+ static st_binicon_t	w_armsbg; 
+ 
+@@ -353,15 +414,18 @@
+ // keycard widgets
+ static st_multicon_t	w_keyboxes[3];
+ 
+-// armor widget
+-static st_percent_t	w_armor;
+-
+ // ammo widgets
+ static st_number_t	w_ammo[4];
+ 
+ // max ammo widgets
+ static st_number_t	w_maxammo[4]; 
+ 
++// Live telemetry shown in the four HUD number fields.
++static int	st_ryujin_liquid_temp;
++static int	st_ryujin_pump_rpm;
++static int	st_ryujin_pump_fan_rpm;
++static int	st_cpu_temp = -1;
++
+ 
+ 
+  // number of frags so far in deathmatch
+@@ -413,6 +477,170 @@
+ //
+ void ST_Stop(void);
+ 
++// Caption font matching the style of the captions baked into STBAR/STARMS
++// (AMMO, HEALTH, ARMS, ...): chunky 5-row glyphs in a light gray gradient
++// that brightens toward the baseline, with a dark shadow one pixel below
++// and to the right.
++#define ST_CAPHEIGHT	5
++#define ST_CAPMAXWIDTH	64
++
++// Body shades, top row to baseline.
++static const byte	st_capshades[ST_CAPHEIGHT] = { 96, 94, 92, 90, 88 };
++#define ST_CAPEDGE	111	// shadow right of a stroke
++#define ST_CAPSHADOW	5	// shadow below a stroke
++
++typedef struct
++{
++    char	ch;
++    char	w;
++    const char	*rows[ST_CAPHEIGHT];
++} st_capglyph_t;
++
++static const st_capglyph_t st_capfont[] =
++{
++    { 'A', 6, { ".####.", "##..##", "######", "##..##", "##..##" } },
++    { 'C', 6, { ".####.", "##....", "##....", "##....", ".####." } },
++    { 'D', 6, { "####..", "##..##", "##..##", "##..##", "####.." } },
++    { 'F', 5, { "#####", "##...", "####.", "##...", "##..." } },
++    { 'I', 4, { "####", ".##.", ".##.", ".##.", "####" } },
++    { 'L', 5, { "##...", "##...", "##...", "##...", "#####" } },
++    { 'M', 7, { "##...##", "###.###", "##.#.##", "##...##", "##...##" } },
++    { 'N', 6, { "##..##", "###.##", "##.###", "##..##", "##..##" } },
++    { 'P', 6, { "####..", "##..##", "##..##", "####..", "##...." } },
++    { 'Q', 6, { ".####.", "##..##", "##..##", "##.###", ".#####" } },
++    { 'R', 6, { "####..", "##..##", "####..", "##.##.", "##..##" } },
++    { 'U', 6, { "##..##", "##..##", "##..##", "##..##", ".####." } },
++    { '\0', 0, { NULL, NULL, NULL, NULL, NULL } }
++};
++
++static const st_capglyph_t *ST_capGlyph(char ch)
++{
++    const st_capglyph_t *g;
++
++    for (g = st_capfont; g->ch; g++)
++	if (g->ch == toupper((unsigned char)ch))
++	    return g;
++    return NULL;
++}
++
++// Wipe a baked caption band by shifting the leather texture from just
++// above down over it, so the redrawn caption sits on matching background.
++static void ST_eraseLabelBand(int x0, int x1)
++{
++    int y;
++
++    for (y = ST_LABELBANDTOP; y <= ST_LABELBANDBOTTOM; y++)
++	memcpy(st_backing_screen + y * ST_WIDTH + x0,
++	       st_backing_screen + (y - ST_LABELBANDUP) * ST_WIDTH + x0,
++	       x1 - x0 + 1);
++}
++
++// Clone a vertical strip of leather over another region of the backing
++// screen, full height so the bar's top highlight and bottom trim survive.
++// Used to hide the baked ammo counter cluster and the old panel dividers.
++static void ST_cloneLeather(int dst_x, int src_x, int w)
++{
++    int y;
++
++    for (y = 0; y < ST_HEIGHT; y++)
++	memcpy(st_backing_screen + y * ST_WIDTH + dst_x,
++	       st_backing_screen + y * ST_WIDTH + src_x, w);
++}
++
++// Hide obsolete panel furniture under cloned leather.  The original
++// key-box bevel is copied back after the large clone as the FAN/CPU splitter.
++static void ST_coverAmmoCluster(void)
++{
++    ST_cloneLeather(ST_BEVEL0_DST, ST_BEVEL0_SRC, ST_BEVELWIDTH);
++    ST_cloneLeather(ST_BEVEL1_DST, ST_BEVEL1_SRC, ST_BEVELWIDTH);
++    ST_cloneLeather(ST_CLONEDSTX, ST_CLONESRCX, ST_CLONEWIDTH);
++    ST_cloneLeather(ST_SPLITTERX, ST_BEVEL2_DST, ST_BEVELWIDTH);
++    ST_cloneLeather(ST_BEVEL2_DST, ST_BEVEL2_SRC, ST_BEVELWIDTH);
++}
++
++// Draw a caption centered on center_x into st_backing_screen, in the
++// baked-caption style.  y is the top body row; shadows extend one row
++// below and one column right of the text.
++static void ST_drawLabel(int center_x, int y, const char *label)
++{
++    // Composed label; one extra shadow row and column.
++    byte	body[ST_CAPHEIGHT + 1][ST_CAPMAXWIDTH + 1];
++    int		width = 0;
++    int		row, col;
++    const char	*p;
++    byte	*out;
++
++    memset(body, 0, sizeof(body));
++
++    for (p = label; *p; p++)
++    {
++	const st_capglyph_t *g = ST_capGlyph(*p);
++
++	if (!g)
++	{
++	    width += 3;
++	    continue;
++	}
++	if (width + g->w > ST_CAPMAXWIDTH)
++	    break;
++	for (row = 0; row < ST_CAPHEIGHT; row++)
++	    for (col = 0; col < g->w; col++)
++		if (g->rows[row][col] != '.')
++		    body[row][width + col] = 1;
++	width += g->w + 1;
++    }
++    if (width)
++	width--;	// no gap after the last glyph
++
++    out = st_backing_screen + y * ST_WIDTH + center_x - width / 2;
++    for (row = 0; row <= ST_CAPHEIGHT; row++)
++	for (col = 0; col <= width; col++)
++	{
++	    if (body[row][col])
++		out[row * ST_WIDTH + col] = st_capshades[row];
++	    else if (col && body[row][col - 1])
++		out[row * ST_WIDTH + col] = ST_CAPEDGE;
++	    else if (row && body[row - 1][col])
++		out[row * ST_WIDTH + col] = ST_CAPSHADOW;
++	    else if (row && col && body[row - 1][col - 1])
++		out[row * ST_WIDTH + col] = ST_CAPSHADOW;
++	}
++}
++
++// Draw one of the big telemetry numbers centered on center_x, clearing the
++// whole field first so shrinking values leave no stale digits.  Values are
++// non-negative and clamped to maxdigits.
++static void ST_drawRyujinNum(int center_x, int value, int maxdigits)
++{
++    int		w = SHORT(tallnum[0]->width);
++    int		h = SHORT(tallnum[0]->height);
++    int		field = maxdigits * w;
++    int		x0 = center_x - field / 2;
++    int		ndigits = 1;
++    int		tmp, total, x, i;
++
++    for (tmp = 10, i = 1; i < maxdigits; tmp *= 10, i++)
++	if (value >= tmp)
++	    ndigits = i + 1;
++    if (value >= tmp)
++	value = tmp - 1;
++
++    V_CopyRect(x0, ST_STATSY - ST_Y, st_backing_screen, field, h,
++	       x0, ST_STATSY);
++
++    if (value < 0)
++	return;
++
++    total = ndigits * w;
++    x = center_x + total / 2;
++    while (ndigits--)
++    {
++	x -= w;
++	V_DrawPatch(x, ST_STATSY, tallnum[value % 10]);
++	value /= 10;
++    }
++}
++
+ void ST_refreshBackground(void)
+ {
+ 
+@@ -427,6 +655,18 @@
+ 
+         V_RestoreBuffer();
+ 
++	// Recaption the bar for the cooler telemetry: cover the ammo counter
++	// cluster with cloned leather, wipe the baked captions, and redraw
++	// the captions in the same style.
++	ST_coverAmmoCluster();
++	ST_eraseLabelBand(ST_PUMPLABELX0, ST_PUMPLABELX1);
++	ST_eraseLabelBand(ST_LIQUIDLABELX0, ST_LIQUIDLABELX1);
++	ST_eraseLabelBand(ST_FANLABELX0, ST_FANLABELX1);
++	ST_drawLabel(ST_PUMPLABELCX, ST_LABELY, "PUMP RPM");
++	ST_drawLabel(ST_LIQUIDLABELCX, ST_LABELY, "LIQ C");
++	ST_drawLabel(ST_FANLABELCX, ST_LABELY, "FAN RPM");
++	ST_drawLabel(ST_CPULABELCX, ST_LABELY, "CPU C");
++
+ 	V_CopyRect(ST_X, 0, st_backing_screen, ST_WIDTH, ST_HEIGHT, ST_X, ST_Y);
+     }
+ 
+@@ -859,32 +1099,8 @@
+ 
+ void ST_updateWidgets(void)
+ {
+-    static int	largeammo = 1994; // means "n/a"
+     int		i;
+ 
+-    // must redirect the pointer if the ready weapon has changed.
+-    //  if (w_ready.data != plyr->readyweapon)
+-    //  {
+-    if (weaponinfo[plyr->readyweapon].ammo == am_noammo)
+-	w_ready.num = &largeammo;
+-    else
+-	w_ready.num = &plyr->ammo[weaponinfo[plyr->readyweapon].ammo];
+-    //{
+-    // static int tic=0;
+-    // static int dir=-1;
+-    // if (!(tic&15))
+-    //   plyr->ammo[weaponinfo[plyr->readyweapon].ammo]+=dir;
+-    // if (plyr->ammo[weaponinfo[plyr->readyweapon].ammo] == -100)
+-    //   dir = 1;
+-    // tic++;
+-    // }
+-    w_ready.data = plyr->readyweapon;
+-
+-    // if (*w_ready.on)
+-    //  STlib_updateNum(&w_ready, true);
+-    // refresh weapon change
+-    //  }
+-
+     // update keycard multiple widgets
+     for (i=0;i<3;i++)
+     {
+@@ -1000,37 +1216,14 @@
+ 
+ void ST_drawWidgets(boolean refresh)
+ {
+-    int		i;
+-
+-    // used by w_arms[] widgets
+-    st_armson = st_statusbaron && !deathmatch;
+-
+-    // used by w_frags widget
+-    st_fragson = deathmatch && st_statusbaron; 
+-
+-    STlib_updateNum(&w_ready, refresh);
+-
+-    for (i=0;i<4;i++)
+-    {
+-	STlib_updateNum(&w_ammo[i], refresh);
+-	STlib_updateNum(&w_maxammo[i], refresh);
+-    }
+-
+-    STlib_updatePercent(&w_health, refresh);
+-    STlib_updatePercent(&w_armor, refresh);
+-
+-    STlib_updateBinIcon(&w_armsbg, refresh);
+-
+-    for (i=0;i<6;i++)
+-	STlib_updateMultIcon(&w_arms[i], refresh);
++    // The weapon/ammo widgets are gone; only the face survives, flanked by
++    // four centered telemetry readings.
++    ST_drawRyujinNum(ST_PUMPCX, st_ryujin_pump_rpm, ST_PUMPWIDTH);
++    ST_drawRyujinNum(ST_LIQUIDCX, st_ryujin_liquid_temp, ST_LIQUIDWIDTH);
++    ST_drawRyujinNum(ST_FANCX, st_ryujin_pump_fan_rpm, ST_FANWIDTH);
++    ST_drawRyujinNum(ST_CPUCX, st_cpu_temp, ST_CPUWIDTH);
+ 
+     STlib_updateMultIcon(&w_faces, refresh);
+-
+-    for (i=0;i<3;i++)
+-	STlib_updateMultIcon(&w_keyboxes[i], refresh);
+-
+-    STlib_updateNum(&w_frags, refresh);
+-
+ }
+ 
+ void ST_doRefresh(void)
+@@ -1229,26 +1422,8 @@
+ 
+     int i;
+ 
+-    // ready weapon ammo
+-    STlib_initNum(&w_ready,
+-		  ST_AMMOX,
+-		  ST_AMMOY,
+-		  tallnum,
+-		  &plyr->ammo[weaponinfo[plyr->readyweapon].ammo],
+-		  &st_statusbaron,
+-		  ST_AMMOWIDTH );
+-
+     // the last weapon type
+-    w_ready.data = plyr->readyweapon; 
+-
+-    // health percentage
+-    STlib_initPercent(&w_health,
+-		      ST_HEALTHX,
+-		      ST_HEALTHY,
+-		      tallnum,
+-		      &plyr->health,
+-		      &st_statusbaron,
+-		      tallpercent);
++    w_ready.data = plyr->readyweapon;
+ 
+     // arms background
+     STlib_initBinIcon(&w_armsbg,
+@@ -1285,13 +1460,8 @@
+ 		       &st_faceindex,
+ 		       &st_statusbaron);
+ 
+-    // armor percentage - should be colored later
+-    STlib_initPercent(&w_armor,
+-		      ST_ARMORX,
+-		      ST_ARMORY,
+-		      tallnum,
+-		      &plyr->armorpoints,
+-		      &st_statusbaron, tallpercent);
++    // Embedded micro-fan RPM shows where ARMOR was; no widget, it is drawn
++    // centered by ST_drawRyujinNum like the other two cooler readings.
+ 
+     // keyboxes 0-2
+     STlib_initMultIcon(&w_keyboxes[0],
+@@ -1414,3 +1584,11 @@
+     st_backing_screen = (byte *) Z_Malloc(ST_WIDTH * ST_HEIGHT, PU_STATIC, 0);
+ }
+ 
++void ST_SetRyujinStats(int liquid_temp, int pump_rpm, int pump_fan_rpm,
++		       int cpu_temp)
++{
++    st_ryujin_liquid_temp = liquid_temp;
++    st_ryujin_pump_rpm = pump_rpm;
++    st_ryujin_pump_fan_rpm = pump_fan_rpm;
++    st_cpu_temp = cpu_temp;
++}

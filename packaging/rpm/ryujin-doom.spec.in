@@ -1,0 +1,96 @@
+Name:           ryujin-doom
+Version:        @VERSION@
+Release:        1%{?dist}
+Summary:        DOOM for the ASUS ROG Ryujin III Extreme LCD
+License:        GPL-3.0-or-later
+URL:            https://github.com/@GITHUB_REPOSITORY@
+BuildArch:      x86_64
+Requires:       libusb1, systemd, udev, acl, curl, ca-certificates, unzip, tar
+
+%description
+Runs DOOM attract mode on the ASUS ROG Ryujin III Extreme LCD and displays
+live liquid temperature, pump speed, micro-fan speed, and CPU package
+temperature in the status bar.
+Use ryujin-doom-wad to download a free game or import an owned commercial IWAD.
+
+%prep
+
+%build
+
+%install
+mkdir -p %{buildroot}
+cp -a @STAGE_DIR@/. %{buildroot}/
+
+%post
+if ! getent group ryujin-doom >/dev/null; then
+    groupadd --system ryujin-doom
+fi
+if ! getent passwd ryujin-doom >/dev/null; then
+    useradd --system --gid ryujin-doom --home-dir /var/lib/ryujin-doom \
+        --shell /usr/sbin/nologin --comment "Ryujin Doom service" ryujin-doom
+fi
+install -d -o ryujin-doom -g ryujin-doom -m 0750 /var/lib/ryujin-doom
+udevadm control --reload-rules || true
+udevadm trigger --subsystem-match=usb --attr-match=idVendor=0b05 --attr-match=idProduct=1bcb || true
+udevadm trigger --subsystem-match=hidraw || true
+systemctl daemon-reload || true
+systemctl enable ryujin-doom.service || true
+if [ -f /var/lib/ryujin-doom/IWAD.WAD ]; then
+    systemctl restart ryujin-doom.service || true
+fi
+if [ ! -f /var/lib/ryujin-doom/IWAD.WAD ]; then
+    echo "Ryujin Doom: attempting to download Doom 1.9 shareware..."
+    if /usr/bin/ryujin-doom-wad install doom-shareware || [ -f /var/lib/ryujin-doom/IWAD.WAD ]; then
+        rm -f /var/lib/ryujin-doom/README-WAD.txt
+    else
+        install -o ryujin-doom -g ryujin-doom -m 0644 \
+            /usr/share/ryujin-doom/README-WAD.txt \
+            /var/lib/ryujin-doom/README-WAD.txt || true
+        echo "Ryujin Doom: WAD download failed; installation will continue." >&2
+        echo "See /var/lib/ryujin-doom/README-WAD.txt for recovery steps." >&2
+    fi
+fi
+
+%preun
+if [ "$1" -eq 0 ]; then
+    systemctl disable --now ryujin-doom.service || true
+else
+    systemctl stop ryujin-doom.service || true
+fi
+
+%postun
+systemctl daemon-reload || true
+systemctl reset-failed ryujin-doom.service 2>/dev/null || true
+udevadm control --reload-rules || true
+for sys_device in /sys/class/hidraw/hidraw*; do
+    [ -r "${sys_device}/device/uevent" ] || continue
+    grep -q '^HID_ID=.*:00000B05:00001BCB$' "${sys_device}/device/uevent" || continue
+    device=/dev/${sys_device##*/}
+    setfacl --remove-all "${device}" 2>/dev/null || true
+    chown root:root "${device}" 2>/dev/null || true
+    chmod 0600 "${device}" 2>/dev/null || true
+done
+udevadm trigger --subsystem-match=usb --attr-match=idVendor=0b05 --attr-match=idProduct=1bcb || true
+udevadm trigger --subsystem-match=hidraw || true
+
+%files
+%dir /usr/lib/ryujin-doom
+/usr/lib/ryujin-doom/ryujin-doom
+/usr/lib/ryujin-doom/fetch-wad.sh
+/usr/bin/ryujin-doom-wad
+%dir /usr/share/ryujin-doom
+/usr/share/ryujin-doom/wads.catalog
+/usr/share/ryujin-doom/README-WAD.txt
+%dir /usr/share/doc/ryujin-doom
+%doc /usr/share/doc/ryujin-doom/README.md
+%doc /usr/share/doc/ryujin-doom/COPYING
+%doc /usr/share/doc/ryujin-doom/DOOM-COPYING.txt
+%doc /usr/share/doc/ryujin-doom/THIRD_PARTY_NOTICES.md
+%doc /usr/share/doc/ryujin-doom/SOURCE.txt
+/usr/lib/systemd/system/ryujin-doom.service
+/usr/lib/udev/rules.d/71-ryujin-doom.rules
+%dir /var/lib/ryujin-doom
+
+%changelog
+* Sat Jul 18 2026 Ryujin Doom Project <noreply@example.invalid> - @VERSION@-1
+- Automated Ryujin Doom release package

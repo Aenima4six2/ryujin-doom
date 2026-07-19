@@ -1,0 +1,18 @@
+<service>
+  <id>ryujin-doom</id>
+  <name>Ryujin Doom</name>
+  <description>DOOM and live cooler/CPU telemetry on the ASUS ROG Ryujin III Extreme LCD.</description>
+  <executable>%BASE%\ryujin-doom.exe</executable>
+  <arguments>-iwad "%ProgramData%\ryujin-doom\IWAD.WAD"</arguments>
+  <workingdirectory>%BASE%</workingdirectory>
+  <startmode>Manual</startmode>
+  <stoptimeout>10sec</stoptimeout>
+  <stopparentprocessfirst>true</stopparentprocessfirst>
+  <onfailure action="restart" delay="5 sec" />
+  <resetfailure>1 hour</resetfailure>
+  <serviceaccount>
+    <user>LocalSystem</user>
+  </serviceaccount>
+  <logpath>%BASE%\logs</logpath>
+  <log mode="roll" />
+</service>

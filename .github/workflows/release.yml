@@ -1,0 +1,87 @@
+name: Build release packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version (X.Y.Z)
+        required: true
+        default: 0.1.0
+  push:
+    branches:
+      - main
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Install Linux release toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential pkg-config libusb-1.0-0-dev git curl patch \
+            zip unzip dpkg-dev rpm gcc-mingw-w64-x86-64 \
+            binutils-mingw-w64-x86-64 cmake nsis
+
+      - name: Select release inputs
+        shell: bash
+        run: |
+          if [[ "${GITHUB_EVENT_NAME}" == workflow_dispatch ]]; then
+            echo "VERSION=${{ inputs.version }}" >> "${GITHUB_ENV}"
+          elif [[ "${GITHUB_REF_TYPE}" == tag ]]; then
+            echo "VERSION=${GITHUB_REF_NAME#v}" >> "${GITHUB_ENV}"
+          else
+            echo "VERSION=$(<VERSION)" >> "${GITHUB_ENV}"
+          fi
+
+      - name: Audit release tree
+        run: ./scripts/check-release-tree.sh
+
+      - name: Build DEB, RPM, Windows setup, and portable archives
+        run: ./scripts/build-release.sh
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ryujin-doom-${{ env.VERSION }}
+          path: dist/*
+          if-no-files-found: error
+
+      - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == tag ]]; then
+            release_tag="${GITHUB_REF_NAME}"
+          else
+            release_tag="v${VERSION}"
+          fi
+
+          if gh release view "${release_tag}" >/dev/null 2>&1; then
+            release_sha=$(gh api \
+              "repos/${GITHUB_REPOSITORY}/commits/${release_tag}" \
+              --jq .sha)
+            if [[ "${release_sha}" != "${GITHUB_SHA}" ]]; then
+              echo "::notice::${release_tag} already exists at ${release_sha}; bump VERSION to publish this commit"
+              exit 0
+            fi
+          elif [[ "${GITHUB_REF_TYPE}" == tag ]]; then
+            gh release create "${release_tag}" --verify-tag --generate-notes
+          else
+            gh release create "${release_tag}" \
+              --target "${GITHUB_SHA}" \
+              --title "Ryujin Doom ${VERSION}" \
+              --generate-notes
+          fi
+
+          gh release upload "${release_tag}" dist/* --clobber

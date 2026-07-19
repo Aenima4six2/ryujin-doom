@@ -1,0 +1,21 @@
+build/
+dist/
+.cache/
+vendor/
+wads/.cache/
+ryujin-doom
+ryujin-doom.exe
+
+# Never commit game data or generated installer binaries.
+*.wad
+*.WAD
+*.pk3
+*.PK3
+*.exe
+*.dll
+*.deb
+*.rpm
+
+# DOOM runtime artifacts
+.default.cfg
+.savegame/

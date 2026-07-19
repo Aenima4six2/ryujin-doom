@@ -1,0 +1,6 @@
+# ASUS ROG Ryujin III Extreme: bulk LCD interface and HID control interface.
+SUBSYSTEM=="usb", ATTR{idVendor}=="0b05", ATTR{idProduct}=="1bcb", GROUP="ryujin-doom", MODE="0660", TAG+="systemd"
+# liquidctl adds uaccess to this hidraw node. Its login-session ACL can retain
+# group::--- even after MODE=0660, locking out the system service. The service
+# group is the authority while Ryujin Doom is installed.
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="0b05", ATTRS{idProduct}=="1bcb", TAG-="uaccess", GROUP="ryujin-doom", MODE="0660", TAG+="systemd", RUN+="/usr/bin/setfacl --modify group::rw $devnode"

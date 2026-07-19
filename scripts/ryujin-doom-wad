@@ -1,0 +1,132 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+system_install=0
+system_prefix=
+case ${script_dir} in
+    /usr/bin) system_prefix=/usr ;;
+    /usr/local/bin) system_prefix=/usr/local ;;
+esac
+
+if [[ -n ${system_prefix} && \
+      -f ${system_prefix}/share/ryujin-doom/wads.catalog && \
+      -x ${system_prefix}/lib/ryujin-doom/fetch-wad.sh ]]; then
+    system_install=1
+    catalog=${system_prefix}/share/ryujin-doom/wads.catalog
+    fetcher=${system_prefix}/lib/ryujin-doom/fetch-wad.sh
+    download_dir=/var/cache/ryujin-doom/wads
+    cache_dir=/var/cache/ryujin-doom/downloads
+    destination=/var/lib/ryujin-doom/IWAD.WAD
+else
+    catalog=${RYUJIN_DOOM_WAD_CATALOG:-"${script_dir}/wads.catalog"}
+    fetcher=${RYUJIN_DOOM_WAD_FETCHER:-"${script_dir}/fetch-wad.sh"}
+    download_dir=${RYUJIN_DOOM_WAD_DIR:-"${script_dir}/wads"}
+    cache_dir=${RYUJIN_DOOM_WAD_CACHE:-"${download_dir}/.cache"}
+    destination=${RYUJIN_DOOM_IWAD_PATH:-"${script_dir}/IWAD.WAD"}
+fi
+
+usage() {
+    cat <<'EOF'
+Usage:
+  ryujin-doom-wad list
+  ryujin-doom-wad install <doom-shareware|freedoom1|freedoom2>
+  ryujin-doom-wad import <path-to-owned-iwad>
+  ryujin-doom-wad current
+
+Installing or importing a WAD replaces the active IWAD and restarts Ryujin Doom.
+EOF
+}
+
+require_files() {
+    [[ -f ${catalog} ]] || { echo "WAD catalog not found: ${catalog}" >&2; exit 1; }
+    [[ -x ${fetcher} ]] || { echo "WAD fetcher not found: ${fetcher}" >&2; exit 1; }
+}
+
+require_root() {
+    if (( system_install )) && (( EUID != 0 )); then
+        echo "Run this command as root, for example: sudo ryujin-doom-wad $*" >&2
+        exit 1
+    fi
+}
+
+verify_iwad() {
+    local path=$1
+    local magic
+
+    [[ -f ${path} ]] || { echo "WAD not found: ${path}" >&2; return 1; }
+    magic=$(LC_ALL=C head -c 4 -- "${path}")
+    [[ ${magic} == IWAD ]] || {
+        echo "${path} is not an IWAD (expected an IWAD header, found '${magic}')" >&2
+        return 1
+    }
+}
+
+activate_wad() {
+    local source=$1
+    local label=$2
+    local destination_dir temporary
+
+    verify_iwad "${source}"
+    destination_dir=$(dirname -- "${destination}")
+    install -d -m 0750 "${destination_dir}"
+    temporary=$(mktemp "${destination_dir}/.IWAD.WAD.XXXXXX")
+    trap 'rm -f -- "${temporary:-}"' EXIT
+    install -m 0640 "${source}" "${temporary}"
+    if (( system_install )); then
+        chown ryujin-doom:ryujin-doom "${temporary}"
+    fi
+    mv -f -- "${temporary}" "${destination}"
+    temporary=
+    trap - EXIT
+    rm -f -- "${destination_dir}/README-WAD.txt"
+
+    if (( system_install )) && command -v systemctl >/dev/null 2>&1; then
+        systemctl enable ryujin-doom.service
+        systemctl restart ryujin-doom.service
+    fi
+    echo "Active Ryujin Doom WAD: ${label}"
+    echo "Installed at: ${destination}"
+}
+
+command_name=${1:-}
+case ${command_name} in
+    list)
+        [[ $# -eq 1 ]] || { usage >&2; exit 2; }
+        require_files
+        RYUJIN_DOOM_WAD_CATALOG="${catalog}" "${fetcher}" list
+        ;;
+    install)
+        [[ $# -eq 2 ]] || { usage >&2; exit 2; }
+        require_root "$@"
+        require_files
+        wad_id=$2
+        RYUJIN_DOOM_WAD_CATALOG="${catalog}" \
+        RYUJIN_DOOM_WAD_DIR="${download_dir}" \
+        RYUJIN_DOOM_WAD_CACHE="${cache_dir}" \
+            "${fetcher}" fetch "${wad_id}"
+        wad_path=$(RYUJIN_DOOM_WAD_CATALOG="${catalog}" \
+            RYUJIN_DOOM_WAD_DIR="${download_dir}" \
+            "${fetcher}" path "${wad_id}")
+        activate_wad "${wad_path}" "${wad_id}"
+        ;;
+    import)
+        [[ $# -eq 2 ]] || { usage >&2; exit 2; }
+        require_root "$@"
+        activate_wad "$2" "$(basename -- "$2")"
+        ;;
+    current)
+        [[ $# -eq 1 ]] || { usage >&2; exit 2; }
+        if [[ ! -f ${destination} ]]; then
+            echo "No active WAD. Choose one with: ryujin-doom-wad install doom-shareware"
+            exit 1
+        fi
+        verify_iwad "${destination}"
+        echo "${destination}"
+        sha256sum "${destination}"
+        ;;
+    *)
+        usage >&2
+        exit 2
+        ;;
+esac
