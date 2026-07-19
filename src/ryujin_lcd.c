@@ -348,6 +348,11 @@ static int bulk_open(void)
 		fprintf(stderr, "ryujin: cannot claim interface %d: %s\n",
 			usb_interface, libusb_error_name(r));
 #ifdef _WIN32
+		if (r == LIBUSB_ERROR_BUSY) {
+			fprintf(stderr,
+				"ryujin: another program still owns the LCD interface; stop Armoury Crate and\n"
+				"ryujin: its related processes, then retry after a few seconds\n");
+		}
 		if (r == LIBUSB_ERROR_NOT_SUPPORTED) {
 			fprintf(stderr,
 				"ryujin: the LCD bulk interface needs a WinUSB-compatible driver;\n"

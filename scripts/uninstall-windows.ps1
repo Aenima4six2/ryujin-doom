@@ -22,6 +22,33 @@ elseif (Get-Service -Name ryujin-doom -ErrorAction SilentlyContinue) {
     & sc.exe delete ryujin-doom | Out-Null
 }
 
+$stopHelper = Join-Path $InstallDir "stop-hardware-monitor.ps1"
+if (Test-Path $stopHelper) {
+    & powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass `
+        -File $stopHelper -InstallDir $InstallDir
+    if ($LASTEXITCODE -ne 0) {
+        throw "The CPU temperature provider did not exit; installed files were left in place."
+    }
+}
+else {
+    $cpuProvider = Join-Path $InstallDir "hardware-monitor\cpu-temp.ps1"
+    Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+        Where-Object {
+            $_.Name -ieq "powershell.exe" -and $_.CommandLine -and
+            $_.CommandLine.IndexOf($cpuProvider,
+                [StringComparison]::OrdinalIgnoreCase) -ge 0
+        } |
+        ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+}
+
+$pawnIoSetup = Join-Path $InstallDir "PawnIO_setup.exe"
+if (Test-Path $pawnIoSetup) {
+    & $pawnIoSetup -uninstall
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warning "PawnIO removal returned exit code $LASTEXITCODE."
+    }
+}
+
 if (Test-Path $InstallDir) {
     Remove-Item -LiteralPath $InstallDir -Recurse -Force
 }

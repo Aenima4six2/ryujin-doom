@@ -252,6 +252,8 @@ install -m 0644 "${repo_dir}/packaging/windows/ryujin-doom-service.xml" \
     "${windows_bundle}/ryujin-doom-service.xml"
 install -m 0644 "${repo_dir}/scripts/ryujin-doom-wad.ps1" \
     "${windows_bundle}/ryujin-doom-wad.ps1"
+install -m 0644 "${repo_dir}/packaging/windows/stop-hardware-monitor.ps1" \
+    "${windows_bundle}/stop-hardware-monitor.ps1"
 install -m 0644 "${repo_dir}/assets/wads.catalog" "${windows_bundle}/wads.catalog"
 install -m 0644 "${repo_dir}/README.md" "${windows_bundle}/README.md"
 install -m 0644 "${copying_file}" "${windows_bundle}/COPYING.txt"
@@ -295,6 +297,7 @@ makensis -WX \
     "-DWAD_HELPER=${repo_dir}/scripts/ryujin-doom-wad.ps1" \
     "-DWAD_CATALOG=${repo_dir}/assets/wads.catalog" \
     "-DWAD_README=${repo_dir}/packaging/windows/README-WAD.txt" \
+    "-DSTOP_HARDWARE_MONITOR=${repo_dir}/packaging/windows/stop-hardware-monitor.ps1" \
     "${repo_dir}/packaging/windows/installer.nsi"
 
 checksum_output="${dist_dir}/SHA256SUMS-${version}.txt"

@@ -173,6 +173,16 @@ elseif (Get-Service -Name ryujin-doom -ErrorAction SilentlyContinue) {
     & sc.exe delete ryujin-doom | Out-Null
 }
 
+# WinSW normally stops this child with the service.  Make upgrades resilient
+# to a delayed or orphaned LibreHardwareMonitor PowerShell host before files
+# in its loaded directory are replaced.
+& powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass `
+    -File (Join-Path $RepoDir "packaging\windows\stop-hardware-monitor.ps1") `
+    -InstallDir $InstallDir
+if ($LASTEXITCODE -ne 0) {
+    throw "The previous CPU temperature provider did not exit; installation was not modified."
+}
+
 New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $InstallDir "logs") -Force | Out-Null
 New-Item -ItemType Directory -Path $DataDir -Force | Out-Null
@@ -181,6 +191,8 @@ New-Item -ItemType Directory -Path $providerDir -Force | Out-Null
 Copy-Item (Join-Path $RepoDir "ryujin-doom.exe") (Join-Path $InstallDir "ryujin-doom.exe") -Force
 Copy-Item (Join-Path $RepoDir "packaging\windows\ryujin-doom-service.xml") $ServiceXml -Force
 Copy-Item (Join-Path $RepoDir "scripts\ryujin-doom-wad.ps1") (Join-Path $InstallDir "ryujin-doom-wad.ps1") -Force
+Copy-Item (Join-Path $RepoDir "packaging\windows\stop-hardware-monitor.ps1") `
+    (Join-Path $InstallDir "stop-hardware-monitor.ps1") -Force
 Copy-Item (Join-Path $RepoDir "assets\wads.catalog") (Join-Path $InstallDir "wads.catalog") -Force
 
 $msysInstallRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $script:MsysBash))

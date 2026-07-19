@@ -62,6 +62,9 @@ Unicode True
 !ifndef WAD_README
   !error "WAD_README is required"
 !endif
+!ifndef STOP_HARDWARE_MONITOR
+  !error "STOP_HARDWARE_MONITOR is required"
+!endif
 
 Name "Ryujin Doom ${VERSION}"
 OutFile "${OUTPUT_FILE}"
@@ -110,6 +113,7 @@ Section "Ryujin Doom service" SEC_MAIN
   File /oname=LIBREHARDWAREMONITOR-MPL-2.0.txt "${LHM_LICENSE}"
   File /oname=LIBREHARDWAREMONITOR-NOTICES.txt "${LHM_NOTICES}"
   File /oname=PawnIO_setup.exe "${PAWNIO_SETUP}"
+  File /oname=stop-hardware-monitor.ps1 "${STOP_HARDWARE_MONITOR}"
   File /oname=SOURCE.txt "${SOURCE_FILE}"
   SetOutPath "$INSTDIR\hardware-monitor"
   File /r "${HARDWARE_MONITOR_DIR}\*.*"
@@ -167,6 +171,17 @@ Section "Uninstall"
   Pop $0
   nsExec::ExecToLog '"$INSTDIR\ryujin-doom-service.exe" uninstall'
   Pop $0
+  DetailPrint "Stopping the CPU temperature provider..."
+  nsExec::ExecToLog 'powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$INSTDIR\stop-hardware-monitor.ps1" -InstallDir "$INSTDIR"'
+  Pop $0
+  ${If} $0 != 0
+    Abort "The CPU temperature provider is still running. Close any Ryujin Doom process and try again."
+  ${EndIf}
+  IfFileExists "$INSTDIR\PawnIO_setup.exe" 0 pawnio_removed
+    DetailPrint "Removing the PawnIO hardware telemetry provider..."
+    nsExec::ExecToLog '"$INSTDIR\PawnIO_setup.exe" -uninstall'
+    Pop $0
+  pawnio_removed:
 
   Delete "$INSTDIR\ryujin-doom.exe"
   Delete "$INSTDIR\ryujin-doom-service.exe"
@@ -183,6 +198,7 @@ Section "Uninstall"
   Delete "$INSTDIR\LIBREHARDWAREMONITOR-MPL-2.0.txt"
   Delete "$INSTDIR\LIBREHARDWAREMONITOR-NOTICES.txt"
   Delete "$INSTDIR\PawnIO_setup.exe"
+  Delete "$INSTDIR\stop-hardware-monitor.ps1"
   Delete "$INSTDIR\SOURCE.txt"
   Delete "$INSTDIR\uninstall.exe"
   RMDir /r "$INSTDIR\hardware-monitor"
