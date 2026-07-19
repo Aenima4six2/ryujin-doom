@@ -153,7 +153,7 @@ make -C "${repo_dir}" -j"${jobs}" PLATFORM=windows \
 windows_exe="${work_dir}/ryujin-doom.exe"
 cp "${repo_dir}/ryujin-doom.exe" "${windows_exe}"
 windows_libusb_dll="${windows_prefix}/bin/libusb-1.0.dll"
-windows_hidapi_dll="${windows_prefix}/bin/hidapi.dll"
+windows_hidapi_dll="${windows_prefix}/bin/libhidapi.dll"
 test -f "${windows_libusb_dll}"
 test -f "${windows_hidapi_dll}"
 
@@ -251,7 +251,7 @@ windows_bundle="${work_dir}/ryujin-doom-${version}-windows-x86_64"
 mkdir -p "${windows_bundle}"
 install -m 0755 "${windows_exe}" "${windows_bundle}/ryujin-doom.exe"
 install -m 0755 "${windows_libusb_dll}" "${windows_bundle}/libusb-1.0.dll"
-install -m 0755 "${windows_hidapi_dll}" "${windows_bundle}/hidapi.dll"
+install -m 0755 "${windows_hidapi_dll}" "${windows_bundle}/libhidapi.dll"
 install -m 0755 "${winsw_exe}" "${windows_bundle}/ryujin-doom-service.exe"
 install -m 0644 "${repo_dir}/packaging/windows/ryujin-doom-service.xml" \
     "${windows_bundle}/ryujin-doom-service.xml"
