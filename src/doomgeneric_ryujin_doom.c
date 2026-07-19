@@ -22,6 +22,7 @@
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <wchar.h>
 #ifndef PATH_MAX
 #define PATH_MAX MAX_PATH
 #endif
@@ -45,6 +46,88 @@ static int lcd_fatal = 0;
 static long long next_stats_update_ns = 0;
 static struct ryujin_stats current_stats;
 static int current_cpu_temp = -1;
+
+#ifdef _WIN32
+/* Armoury integration stays in version-tolerant PowerShell scripts packaged
+ * beside the executable. This runner merely invokes them best-effort, so an
+ * absent or unsupported Armoury installation can never stop DOOM.
+ */
+static void run_windows_hook(const wchar_t *script_name, int late_refresh)
+{
+	wchar_t executable[MAX_PATH];
+	wchar_t *separator;
+	wchar_t script[MAX_PATH];
+	wchar_t program_data[MAX_PATH];
+	wchar_t state_path[MAX_PATH];
+	wchar_t log_path[MAX_PATH];
+	wchar_t command_line[MAX_PATH * 4];
+	STARTUPINFOW startup_info;
+	PROCESS_INFORMATION process_info;
+	DWORD result;
+
+	result = GetModuleFileNameW(NULL, executable, MAX_PATH);
+	if (result == 0 || result >= MAX_PATH)
+		return;
+	separator = wcsrchr(executable, L'\\');
+	if (!separator)
+		return;
+	*separator = L'\0';
+	result = swprintf(script, MAX_PATH, L"%ls\\%ls", executable, script_name);
+	if (result < 0 || result >= MAX_PATH ||
+	    GetFileAttributesW(script) == INVALID_FILE_ATTRIBUTES)
+		return;
+	if (!GetEnvironmentVariableW(L"ProgramData", program_data, MAX_PATH))
+		return;
+	result = swprintf(state_path, MAX_PATH,
+			  L"%ls\\ryujin-doom\\armoury-crate-state.json", program_data);
+	if (result < 0 || result >= MAX_PATH)
+		return;
+	result = swprintf(log_path, MAX_PATH, L"%ls\\logs\\armoury-crate.log",
+			  executable);
+	if (result < 0 || result >= MAX_PATH)
+		return;
+	if (late_refresh) {
+		result = swprintf(command_line, sizeof(command_line) / sizeof(command_line[0]),
+			    L"powershell.exe -NoLogo -NoProfile -NonInteractive "
+			    L"-ExecutionPolicy Bypass -File \"%ls\" -StatePath \"%ls\" "
+			    L"-LogPath \"%ls\" -Background -DelaySeconds 75",
+			    script, state_path, log_path);
+		if (result < 0 || result >= (int)(sizeof(command_line) / sizeof(command_line[0])))
+			return;
+	} else {
+		result = swprintf(command_line,
+			       sizeof(command_line) / sizeof(command_line[0]),
+		       L"powershell.exe -NoLogo -NoProfile -NonInteractive "
+		       L"-ExecutionPolicy Bypass -File \"%ls\" -StatePath \"%ls\" "
+		       L"-LogPath \"%ls\"", script, state_path, log_path);
+		if (result < 0 || result >= (int)(sizeof(command_line) / sizeof(command_line[0])))
+			return;
+	}
+
+	memset(&startup_info, 0, sizeof(startup_info));
+	memset(&process_info, 0, sizeof(process_info));
+	startup_info.cb = sizeof(startup_info);
+	if (!CreateProcessW(NULL, command_line, NULL, NULL, FALSE,
+			CREATE_NO_WINDOW, NULL, executable, &startup_info,
+			&process_info))
+		return;
+	if (!late_refresh)
+		WaitForSingleObject(process_info.hProcess, 10000);
+	CloseHandle(process_info.hThread);
+	CloseHandle(process_info.hProcess);
+}
+
+static void windows_start_hooks(void)
+{
+	run_windows_hook(L"armoury-crate-stop.ps1", 0);
+	run_windows_hook(L"armoury-crate-stop.ps1", 1);
+}
+
+static void windows_stop_hooks(void)
+{
+	run_windows_hook(L"armoury-crate-restore.ps1", 0);
+}
+#endif
 
 static void handle_signal(int sig)
 {
@@ -120,11 +203,17 @@ void DG_Init(void)
 	if (!opt_fake_stats)
 		cpu_temp_open();
 	if (!opt_no_lcd) {
+#ifdef _WIN32
+		windows_start_hooks();
+#endif
 		fprintf(stderr, "ryujin-doom: initializing LCD\n");
 		if (lcd_open() < 0) {
 			fprintf(stderr, "ryujin-doom: cannot open the LCD (use --no-lcd to run without it)\n");
 			cpu_temp_close();
 			lcd_close();
+#ifdef _WIN32
+			windows_stop_hooks();
+#endif
 			exit(1);
 		}
 	}
@@ -292,6 +381,9 @@ int main(int argc, char **argv)
 
 	cpu_temp_close();
 	lcd_close();
+#ifdef _WIN32
+	windows_stop_hooks();
+#endif
 	fprintf(stderr, "ryujin-doom: %s, %lu frames pushed\n",
 		lcd_fatal ? "LCD error" : "stopping", frames_pushed);
 	return lcd_fatal ? 1 : 0;

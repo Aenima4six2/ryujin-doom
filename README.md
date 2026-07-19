@@ -66,11 +66,11 @@ fully exit Armoury Crate (including its background LCD/display component) from
 its tray icon or Task Manager. Reopen Armoury Crate after Ryujin Doom exits to
 return to its normal display.
 
-The Windows service also makes a best-effort attempt to pause and restore a
-recognized Armoury LCD task. It uses delayed automatic start and rechecks once
-about 75 seconds after launch to handle a late-starting Armoury writer. It
-never blocks DOOM startup or shutdown; details are written to
-`logs\armoury-crate.log` in the installation directory.
+The Windows service makes a best-effort attempt to pause and restore a
+recognized Armoury LCD task, then rechecks about 75 seconds after launch to
+handle a late-starting Armoury writer. It never blocks DOOM startup or
+shutdown; details are written to `logs\armoury-crate.log` in the installation
+directory.
 
 If your version still conflicts, run these version-specific commands from an
 elevated PowerShell window:

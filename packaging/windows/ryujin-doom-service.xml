@@ -5,26 +5,7 @@
   <executable>%BASE%\ryujin-doom.exe</executable>
   <arguments>-iwad "%ProgramData%\ryujin-doom\IWAD.WAD"</arguments>
   <workingdirectory>%BASE%</workingdirectory>
-  <prestart>
-    <executable>powershell.exe</executable>
-    <arguments>-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%BASE%\armoury-crate-stop.ps1" -StatePath "%ProgramData%\ryujin-doom\armoury-crate-state.json" -LogPath "%BASE%\logs\armoury-crate.log"</arguments>
-    <stdoutPath>NUL</stdoutPath>
-    <stderrPath>NUL</stderrPath>
-  </prestart>
-  <poststart>
-    <executable>powershell.exe</executable>
-    <arguments>-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%BASE%\armoury-crate-stop.ps1" -StatePath "%ProgramData%\ryujin-doom\armoury-crate-state.json" -LogPath "%BASE%\logs\armoury-crate.log" -Background -DelaySeconds 75</arguments>
-    <stdoutPath>NUL</stdoutPath>
-    <stderrPath>NUL</stderrPath>
-  </poststart>
-  <poststop>
-    <executable>powershell.exe</executable>
-    <arguments>-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%BASE%\armoury-crate-restore.ps1" -StatePath "%ProgramData%\ryujin-doom\armoury-crate-state.json" -LogPath "%BASE%\logs\armoury-crate.log"</arguments>
-    <stdoutPath>NUL</stdoutPath>
-    <stderrPath>NUL</stderrPath>
-  </poststop>
   <startmode>Manual</startmode>
-  <delayedAutoStart>true</delayedAutoStart>
   <stoptimeout>10sec</stoptimeout>
   <stopparentprocessfirst>true</stopparentprocessfirst>
   <onfailure action="restart" delay="5 sec" />
