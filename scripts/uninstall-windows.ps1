@@ -43,9 +43,14 @@ else {
 
 $pawnIoSetup = Join-Path $InstallDir "PawnIO_setup.exe"
 if (Test-Path $pawnIoSetup) {
-    & $pawnIoSetup -uninstall
-    if ($LASTEXITCODE -ne 0) {
-        Write-Warning "PawnIO removal returned exit code $LASTEXITCODE."
+    $pawnIoProcess = Start-Process -FilePath $pawnIoSetup -ArgumentList "-uninstall" -PassThru
+    if (-not $pawnIoProcess.WaitForExit(15000)) {
+        Write-Warning "PawnIO removal did not exit; stopping its setup process."
+        Stop-Process -Id $pawnIoProcess.Id -Force -ErrorAction SilentlyContinue
+        $pawnIoProcess.WaitForExit()
+    }
+    elseif ($pawnIoProcess.ExitCode -ne 0) {
+        Write-Warning "PawnIO removal returned exit code $($pawnIoProcess.ExitCode)."
     }
 }
 
