@@ -191,6 +191,8 @@ New-Item -ItemType Directory -Path $providerDir -Force | Out-Null
 Copy-Item (Join-Path $RepoDir "ryujin-doom.exe") (Join-Path $InstallDir "ryujin-doom.exe") -Force
 Copy-Item (Join-Path $RepoDir "packaging\windows\ryujin-doom-service.xml") $ServiceXml -Force
 Copy-Item (Join-Path $RepoDir "scripts\ryujin-doom-wad.ps1") (Join-Path $InstallDir "ryujin-doom-wad.ps1") -Force
+Copy-Item (Join-Path $RepoDir "scripts\uninstall-windows.ps1") `
+    (Join-Path $InstallDir "uninstall-windows.ps1") -Force
 Copy-Item (Join-Path $RepoDir "packaging\windows\stop-hardware-monitor.ps1") `
     (Join-Path $InstallDir "stop-hardware-monitor.ps1") -Force
 Copy-Item (Join-Path $RepoDir "assets\wads.catalog") (Join-Path $InstallDir "wads.catalog") -Force
@@ -269,6 +271,7 @@ Write-Host "Ryujin Doom installed as the 'ryujin-doom' Windows service."
 Write-Host "Install directory: $InstallDir"
 Write-Host "WAD data: $DataDir"
 Write-Host "Logs: $(Join-Path $InstallDir 'logs')"
+Write-Host "Uninstall: powershell.exe -ExecutionPolicy Bypass -File $(Join-Path $InstallDir 'uninstall-windows.ps1')"
 if ($NoStart) {
     Write-Host "Start it with: Start-Service ryujin-doom"
 }
