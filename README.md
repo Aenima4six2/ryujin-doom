@@ -64,31 +64,25 @@ from Administrator PowerShell.
 Armoury Crate can write to the same cooler LCD. Before starting Ryujin Doom,
 fully exit Armoury Crate (including its background LCD/display component) from
 its tray icon or Task Manager. Reopen Armoury Crate after Ryujin Doom exits to
-return to its normal display. Ryujin Doom deliberately does not stop, disable,
-or restart ASUS tasks, services, or processes, because their names and startup
-behavior vary across Armoury Crate versions.
+return to its normal display.
 
-For Armoury Crate installations that use the `ArmourySocketServer` scheduled
-task, the following version-specific commands can be run from an elevated
-PowerShell window before and after Ryujin Doom:
+The Windows service also makes a best-effort attempt to pause and restore a
+recognized Armoury LCD task. It never blocks DOOM startup or shutdown; details
+are written to `logs\armoury-crate.log` in the installation directory.
+
+If your version still conflicts, run these version-specific commands from an
+elevated PowerShell window:
 
 ```powershell
 # Before Ryujin Doom: disable the task and stop its current writer.
 & schtasks.exe /Change /TN '\ASUS\ArmourySocketServer' /Disable; & schtasks.exe /End /TN '\ASUS\ArmourySocketServer'; & taskkill.exe /F /T /IM ArmourySocketServer.exe
 
-# After Ryujin Doom: re-enable and trigger the task, then reopen Armoury Crate if needed.
+# After Ryujin Doom: re-enable and trigger the task; reopen Armoury Crate if needed.
 & schtasks.exe /Change /TN '\ASUS\ArmourySocketServer' /Enable; & schtasks.exe /Run /TN '\ASUS\ArmourySocketServer'
 ```
 
-If either command reports that the task does not exist, use Armoury Crate's
-tray/menu controls or Task Manager instead; do not substitute a guessed task,
-service, or executable name.
-
-The Windows service also includes best-effort start/stop hooks for this task
-profile. They discover task actions at runtime, save only the tasks they
-disabled, and always allow Ryujin Doom to start or stop even when Armoury Crate
-is absent or uses an unsupported layout. Their activity is logged to
-`logs\armoury-crate.log` in the installation directory.
+If the task does not exist, use Armoury Crate's own controls or Task Manager;
+do not substitute a guessed task, service, or executable name.
 
 ## Build and run
 
