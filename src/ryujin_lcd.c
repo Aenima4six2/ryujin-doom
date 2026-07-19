@@ -53,12 +53,15 @@ static int usb_interface = -1;
 static int kernel_driver_detached = 0;
 static uint8_t native_frame[LCD_FRAME_SIZE];
 
-/* Write one report: leading 0x00 report-ID byte (hidraw convention for
- * unnumbered reports), then the 65-byte report (prefix, payload, zero pad).
+/* Write the device's 65-byte report: 0xEC prefix, payload, and zero pad.
+ *
+ * The Ryujin report descriptor has no separate report-ID byte.  Supplying a
+ * leading 0x00 makes the Windows HID write 66 bytes long, which the HID
+ * driver rejects before the device receives the firmware query.
  */
 static int hid_write_report(const uint8_t *payload, size_t len)
 {
-	uint8_t buf[1 + REPORT_LENGTH];
+	uint8_t buf[REPORT_LENGTH];
 #ifdef _WIN32
 	int written;
 #else
@@ -69,9 +72,8 @@ static int hid_write_report(const uint8_t *payload, size_t len)
 		len = REPORT_LENGTH - 1;
 
 	memset(buf, 0, sizeof(buf));
-	buf[0] = 0x00;			/* report ID */
-	buf[1] = REPORT_PREFIX;
-	memcpy(&buf[2], payload, len);
+	buf[0] = REPORT_PREFIX;
+	memcpy(&buf[1], payload, len);
 
 
 #ifdef _WIN32
@@ -80,10 +82,17 @@ static int hid_write_report(const uint8_t *payload, size_t len)
 	written = write(hid_fd, buf, sizeof(buf));
 #endif
 	if (written < 0 || (size_t)written != sizeof(buf)) {
-		fprintf(stderr, "ryujin: hid write failed: %s\n",
 #ifdef _WIN32
-			written < 0 ? "HIDAPI error" : "short write");
+		if (written < 0) {
+			const wchar_t *error = hid_error(hid_handle);
+
+			fprintf(stderr, "ryujin: hid write failed: %ls\n",
+				error ? error : L"unknown HIDAPI error");
+		} else {
+			fprintf(stderr, "ryujin: hid write failed: short write\n");
+		}
 #else
+		fprintf(stderr, "ryujin: hid write failed: %s\n",
 			written < 0 ? strerror(errno) : "short write");
 #endif
 		return -1;

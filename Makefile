@@ -7,7 +7,10 @@ STATIC_DEPS ?= 0
 
 PKG_CONFIG_LIBS = $(PKG_CONFIG) $(if $(filter 1,$(STATIC_DEPS)),--static) --libs
 
-CFLAGS = -O2 -Wall -DNORMALUNIX -Ivendor/doomgeneric/doomgeneric
+# The pinned doomgeneric source declares `false` as an enum member, which is
+# incompatible with GCC 16's default C23 mode.  Keep the project on GNU C17
+# for reproducible builds across current GCC releases.
+CFLAGS = -O2 -Wall -std=gnu17 -DNORMALUNIX -Ivendor/doomgeneric/doomgeneric
 
 ifeq ($(PLATFORM),windows)
 TARGET = ryujin-doom.exe
