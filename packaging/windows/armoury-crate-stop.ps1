@@ -2,7 +2,8 @@ param(
     [Parameter(Mandatory)] [string] $StatePath,
     [Parameter(Mandatory)] [string] $LogPath,
     [switch] $Refresh,
-    [ValidateRange(0, 60)] [int] $DelaySeconds = 0
+    [switch] $Background,
+    [ValidateRange(0, 300)] [int] $DelaySeconds = 0
 )
 
 # Best-effort companion for the Windows service. Never fail the service start.
@@ -18,11 +19,29 @@ function Write-ArmouryLog([string] $Message) {
 }
 
 try {
+    if ($Background) {
+        $arguments = @(
+            '-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
+            '-File', ('"{0}"' -f $PSCommandPath),
+            '-StatePath', ('"{0}"' -f $StatePath),
+            '-LogPath', ('"{0}"' -f $LogPath),
+            '-Refresh', '-DelaySeconds', $DelaySeconds
+        )
+        Start-Process -FilePath 'powershell.exe' -ArgumentList $arguments `
+            -WindowStyle Hidden
+        Write-ArmouryLog "scheduled delayed Armoury LCD refresh"
+        exit 0
+    }
+
     if ($DelaySeconds) {
         Start-Sleep -Seconds $DelaySeconds
     }
 
     $hasState = Test-Path -LiteralPath $StatePath
+    if ($Refresh -and -not $hasState) {
+        Write-ArmouryLog "skipped delayed refresh after service stopped"
+        exit 0
+    }
     if ($hasState -and -not $Refresh) {
         Write-ArmouryLog "existing state retained after an unclean service stop"
         exit 0

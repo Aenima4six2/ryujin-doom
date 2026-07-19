@@ -13,7 +13,7 @@
   </prestart>
   <poststart>
     <executable>powershell.exe</executable>
-    <arguments>-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%BASE%\armoury-crate-stop.ps1" -StatePath "%ProgramData%\ryujin-doom\armoury-crate-state.json" -LogPath "%BASE%\logs\armoury-crate.log" -Refresh -DelaySeconds 5</arguments>
+    <arguments>-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%BASE%\armoury-crate-stop.ps1" -StatePath "%ProgramData%\ryujin-doom\armoury-crate-state.json" -LogPath "%BASE%\logs\armoury-crate.log" -Background -DelaySeconds 75</arguments>
     <stdoutPath>NUL</stdoutPath>
     <stderrPath>NUL</stderrPath>
   </poststart>
