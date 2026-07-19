@@ -59,10 +59,14 @@ The installer also installs PawnIO and a LibreHardwareMonitor provider for CPU
 temperature. Portable `.zip` users must run `PawnIO_setup.exe -install` once
 from Administrator PowerShell.
 
-When Armoury Crate is installed, Ryujin Doom temporarily disables its
-`ArmourySocketServer` task and ends its AIOFanSDK process tree while it owns
-the LCD. The task is re-enabled when Ryujin Doom exits, so Armoury Crate can
-resume its normal cooler display afterward.
+### Armoury Crate
+
+Armoury Crate can write to the same cooler LCD. Before starting Ryujin Doom,
+fully exit Armoury Crate (including its background LCD/display component) from
+its tray icon or Task Manager. Reopen Armoury Crate after Ryujin Doom exits to
+return to its normal display. Ryujin Doom deliberately does not stop, disable,
+or restart ASUS tasks, services, or processes, because their names and startup
+behavior vary across Armoury Crate versions.
 
 ## Build and run
 

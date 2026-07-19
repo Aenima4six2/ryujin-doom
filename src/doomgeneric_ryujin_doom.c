@@ -46,30 +46,6 @@ static long long next_stats_update_ns = 0;
 static struct ryujin_stats current_stats;
 static int current_cpu_temp = -1;
 
-#ifdef _WIN32
-/* Armoury Crate's per-user ArmourySocketServer task launches AIOFanSDK,
- * another writer for the Ryujin LCD bulk interface. The panel has no
- * exclusive-access arbitration, so stop that writer before opening it and
- * return its task when Doom exits. All commands are best-effort because
- * Armoury Crate is optional.
- */
-static void armoury_lcd_takeover(void)
-{
-	/* Preserve a user's pre-existing disabled state. */
-	(void)system("schtasks.exe /Query /TN \"\\ASUS\\ArmourySocketServer\" /XML | findstr.exe /I /C:\"<Enabled>true</Enabled>\" >NUL && (schtasks.exe /Change /TN \"\\ASUS\\ArmourySocketServer\" /Disable >NUL 2>&1 && echo enabled > \"%ProgramData%\\ryujin-doom\\armoury-socket-task.disabled\")");
-	(void)system("schtasks.exe /End /TN \"\\ASUS\\ArmourySocketServer\" >NUL 2>&1");
-	(void)system("taskkill.exe /F /T /IM ArmourySocketServer.exe >NUL 2>&1");
-}
-
-static void armoury_lcd_release(void)
-{
-	/* Re-enable and run the task. Enabling alone waits for its next trigger,
-	 * leaving the cooler blank until Armoury Crate happens to restart itself.
-	 */
-	(void)system("if exist \"%ProgramData%\\ryujin-doom\\armoury-socket-task.disabled\" (schtasks.exe /Change /TN \"\\ASUS\\ArmourySocketServer\" /Enable >NUL 2>&1 & schtasks.exe /Run /TN \"\\ASUS\\ArmourySocketServer\" >NUL 2>&1 & del /Q \"%ProgramData%\\ryujin-doom\\armoury-socket-task.disabled\")");
-}
-#endif
-
 static void handle_signal(int sig)
 {
 	(void)sig;
@@ -144,17 +120,11 @@ void DG_Init(void)
 	if (!opt_fake_stats)
 		cpu_temp_open();
 	if (!opt_no_lcd) {
-#ifdef _WIN32
-		armoury_lcd_takeover();
-#endif
 		fprintf(stderr, "ryujin-doom: initializing LCD\n");
 		if (lcd_open() < 0) {
 			fprintf(stderr, "ryujin-doom: cannot open the LCD (use --no-lcd to run without it)\n");
 			cpu_temp_close();
 			lcd_close();
-#ifdef _WIN32
-			armoury_lcd_release();
-#endif
 			exit(1);
 		}
 	}
@@ -322,9 +292,6 @@ int main(int argc, char **argv)
 
 	cpu_temp_close();
 	lcd_close();
-#ifdef _WIN32
-	armoury_lcd_release();
-#endif
 	fprintf(stderr, "ryujin-doom: %s, %lu frames pushed\n",
 		lcd_fatal ? "LCD error" : "stopping", frames_pushed);
 	return lcd_fatal ? 1 : 0;
