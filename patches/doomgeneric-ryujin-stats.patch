@@ -30,7 +30,7 @@
  #include "w_wad.h"
  
  #include "deh_main.h"
-@@ -86,6 +89,67 @@
+@@ -86,6 +89,69 @@
  #define ST_FX  			143
  #define ST_FY  			169
  
@@ -84,8 +84,9 @@
 +#define ST_CLONEWIDTH		81
 +
 +// Obsolete panel dividers (each a dark line plus bevel highlight) get the
-+// same treatment: covered with plain leather cloned from just beside them,
-+// while the intentional FAN/CPU splitter is restored separately below.
++// same treatment: covered with plain leather cloned from just beside them.
++// Fresh splitters are restored midway between the maximum-width number
++// fields, leaving balanced clearance around the four- and two-digit values.
 +#define ST_BEVEL0_DST		46	// AMMO number-well edge (PUMP panel)
 +#define ST_BEVEL0_SRC		49
 +#define ST_BEVEL1_DST		104	// ARMS bay edge (LIQUID panel)
@@ -93,12 +94,13 @@
 +#define ST_BEVEL2_DST		235	// key-box divider (FAN panel)
 +#define ST_BEVEL2_SRC		231
 +#define ST_BEVELWIDTH		3
-+#define ST_SPLITTERX		247
++#define ST_PUMP_LIQ_SPLITTERX	91
++#define ST_FAN_CPU_SPLITTERX	255
 +
  // Should be set to patch width
  //  for tall numbers later on
  #define ST_TALLNUMWIDTH		(tallnum[0]->width)
-@@ -337,9 +401,6 @@
+@@ -337,9 +403,6 @@
   // in deathmatch only, summary of frags stats
  static st_number_t	w_frags;
  
@@ -108,7 +110,7 @@
  // arms background
  static st_binicon_t	w_armsbg; 
  
-@@ -353,15 +414,18 @@
+@@ -353,15 +416,18 @@
  // keycard widgets
  static st_multicon_t	w_keyboxes[3];
  
@@ -130,7 +132,7 @@
  
  
   // number of frags so far in deathmatch
-@@ -413,6 +477,170 @@
+@@ -413,6 +479,171 @@
  //
  void ST_Stop(void);
  
@@ -204,14 +206,15 @@
 +	       st_backing_screen + y * ST_WIDTH + src_x, w);
 +}
 +
-+// Hide obsolete panel furniture under cloned leather.  The original
-+// key-box bevel is copied back after the large clone as the FAN/CPU splitter.
++// Hide obsolete panel furniture under cloned leather.  The original key-box
++// bevel supplies both restored telemetry splitters after the large clone.
 +static void ST_coverAmmoCluster(void)
 +{
 +    ST_cloneLeather(ST_BEVEL0_DST, ST_BEVEL0_SRC, ST_BEVELWIDTH);
 +    ST_cloneLeather(ST_BEVEL1_DST, ST_BEVEL1_SRC, ST_BEVELWIDTH);
 +    ST_cloneLeather(ST_CLONEDSTX, ST_CLONESRCX, ST_CLONEWIDTH);
-+    ST_cloneLeather(ST_SPLITTERX, ST_BEVEL2_DST, ST_BEVELWIDTH);
++    ST_cloneLeather(ST_PUMP_LIQ_SPLITTERX, ST_BEVEL2_DST, ST_BEVELWIDTH);
++    ST_cloneLeather(ST_FAN_CPU_SPLITTERX, ST_BEVEL2_DST, ST_BEVELWIDTH);
 +    ST_cloneLeather(ST_BEVEL2_DST, ST_BEVEL2_SRC, ST_BEVELWIDTH);
 +}
 +
@@ -301,7 +304,7 @@
  void ST_refreshBackground(void)
  {
  
-@@ -427,6 +655,18 @@
+@@ -427,6 +658,18 @@
  
          V_RestoreBuffer();
  
@@ -320,7 +323,7 @@
  	V_CopyRect(ST_X, 0, st_backing_screen, ST_WIDTH, ST_HEIGHT, ST_X, ST_Y);
      }
  
-@@ -859,32 +1099,8 @@
+@@ -859,32 +1102,8 @@
  
  void ST_updateWidgets(void)
  {
@@ -353,7 +356,7 @@
      // update keycard multiple widgets
      for (i=0;i<3;i++)
      {
-@@ -1000,37 +1216,14 @@
+@@ -1000,37 +1219,14 @@
  
  void ST_drawWidgets(boolean refresh)
  {
@@ -397,7 +400,7 @@
  }
  
  void ST_doRefresh(void)
-@@ -1229,26 +1422,8 @@
+@@ -1229,26 +1425,8 @@
  
      int i;
  
@@ -425,7 +428,7 @@
  
      // arms background
      STlib_initBinIcon(&w_armsbg,
-@@ -1285,13 +1460,8 @@
+@@ -1285,13 +1463,8 @@
  		       &st_faceindex,
  		       &st_statusbaron);
  
@@ -441,7 +444,7 @@
  
      // keyboxes 0-2
      STlib_initMultIcon(&w_keyboxes[0],
-@@ -1414,3 +1584,11 @@
+@@ -1414,3 +1587,11 @@
      st_backing_screen = (byte *) Z_Malloc(ST_WIDTH * ST_HEIGHT, PU_STATIC, 0);
  }
  
