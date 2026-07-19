@@ -41,6 +41,7 @@
 
 #define HID_READ_TIMEOUT_MS 500
 #define HID_READ_RETRIES 4
+#define HID_DRAIN_MAX_REPORTS 64
 
 #ifdef _WIN32
 static hid_device *hid_handle = NULL;
@@ -105,11 +106,20 @@ static void hid_drain(void)
 {
 	uint8_t tmp[REPORT_LENGTH];
 #ifdef _WIN32
+	int reports = 0;
 
 	hid_set_nonblocking(hid_handle, 1);
-	while (hid_read(hid_handle, tmp, sizeof(tmp)) > 0)
-		;
+	/*
+	 * Some Ryujin HID interfaces continuously publish status reports.  Do
+	 * not wait for an empty queue here: that condition may never occur and
+	 * used to leave startup stuck before the first firmware query.
+	 */
+	while (reports < HID_DRAIN_MAX_REPORTS &&
+	       hid_read(hid_handle, tmp, sizeof(tmp)) > 0)
+		reports++;
 	hid_set_nonblocking(hid_handle, 0);
+	if (reports == HID_DRAIN_MAX_REPORTS)
+		fprintf(stderr, "ryujin: HID input remained busy; continuing with firmware query\n");
 #else
 	int flags = fcntl(hid_fd, F_GETFL, 0);
 
